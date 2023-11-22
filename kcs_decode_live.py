@@ -13,11 +13,12 @@ from itertools import islice
 import pyaudio
 
 # audio I/O settings
-FORMAT = pyaudio.paInt16  # must be integer type
-CHANNELS = 1
+FORMAT = pyaudio.paInt16  # must be signed integer type
+CHANNELS = 2
 FRAMERATE = 44100
 CHUNK = 1024
-MSB_HI_THRES = 0x10  # MSB sign-change threshold
+MSB_HI_THRES = 0x10  # MSB sign-change thresholds
+MSB_LO_THRES = 0xFF - MSB_HI_THRES  # symmetric
 
 # init PyAudio
 pa = pyaudio.PyAudio()
@@ -47,8 +48,8 @@ def generate_wav_sign_change_bits(device, monitor_device):
             frames_per_buffer=CHUNK,
         )
 
-    # yield one sign bit for each sample
-    previous = 0
+    # yield one sign-change bit for each sample
+    previous = 0  # init to low
     while True:
         # obtain samples
         frames = stream.read(CHUNK, exception_on_overflow=False)
@@ -61,10 +62,14 @@ def generate_wav_sign_change_bits(device, monitor_device):
         msbytes = bytearray(frames[samplewidth - 1 :: samplewidth * CHANNELS])
         # Emit a stream of sign-change bits
         for byte in msbytes:
-            # error tolerance: only flip sign if sample>0 AND over threshold
-            byte_high = 1 if ((byte < 0x80) and (byte > MSB_HI_THRES)) else 0
-            yield 1 if (byte_high ^ previous) else 0
-            previous = byte_high
+            # error tolerance: only flip pos if over threshold (either side)
+            if previous == 0:  # flip high if sample > 0 and over thres
+                pos = 1 if ((byte < 0x80) and (byte > MSB_HI_THRES)) else 0
+            else:  # flip low if sample < 0 and under thres
+                pos = 0 if ((byte > 0x80) and (byte < MSB_LO_THRES)) else 1
+            # XOR with previous pos to get change bit
+            yield 1 if (pos ^ previous) else 0
+            previous = pos
 
 
 # Generate a sequence of data bytes by sampling the stream of sign change bits
