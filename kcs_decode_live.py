@@ -19,6 +19,7 @@ FRAMERATE = 44100
 CHUNK = 1024
 MSB_HI_THRES = 0x10  # MSB sign-change thresholds
 MSB_LO_THRES = 0xFF - MSB_HI_THRES  # symmetric
+SMPL_ALN_FRAC = 3  # fraction by which to advance sample on start bit
 
 # init PyAudio
 pa = pyaudio.PyAudio()
@@ -73,11 +74,21 @@ def generate_wav_sign_change_bits(device, monitor_device):
 
 
 # Generate a sequence of data bytes by sampling the stream of sign change bits
-def generate_bytes(bitstream, framerate, kcs_base_freq):
+def generate_bytes(bitstream, framerate, kcs_base_freq, highspeed_mode):
     bitmasks = [0x1, 0x2, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80]
 
+    # set speed mode
+    if highspeed_mode:  # 1200 baud
+        fpb_mult = 2  # 2 cycles for a one bit
+        thres_0_hi = 2
+        thres_1_lo = 4
+    else:  # 300 baud
+        fpb_mult = 8  # 8 cycles for a one bit
+        thres_0_hi = 9
+        thres_1_lo = 12
+
     # Compute the number of audio frames used to encode a single data bit
-    frames_per_bit = int(round(float(framerate) * 8 / kcs_base_freq))
+    frames_per_bit = int(round(float(framerate) * fpb_mult / kcs_base_freq))
 
     # Queue of sampled sign bits
     sample = deque(maxlen=frames_per_bit)
@@ -87,6 +98,7 @@ def generate_bytes(bitstream, framerate, kcs_base_freq):
     sign_changes = sum(sample)
 
     # Look for the start bit
+    prev_changes = sign_changes
     for val in bitstream:
         if val:
             sign_changes += 1
@@ -94,16 +106,22 @@ def generate_bytes(bitstream, framerate, kcs_base_freq):
             sign_changes -= 1
         sample.append(val)
 
-        # If a start bit detected, sample the next 8 data bits
-        if sign_changes <= 9:
+        # If a start bit is detected, sample the next 8 data bits
+        # NOTE: enforce start bit to be 1-to-0; also re-aligns byte position
+        if (sign_changes < prev_changes) and (sign_changes <= thres_0_hi):
+            # align sample by advancing one third of a cycle
+            sample.extend(islice(bitstream, frames_per_bit // SMPL_ALN_FRAC))
+            # obtain eight bits (least significant first)
             byteval = 0
             for mask in bitmasks:
-                if sum(islice(bitstream, frames_per_bit)) >= 12:
+                if sum(islice(bitstream, frames_per_bit)) >= thres_1_lo:
                     byteval |= mask
             yield byteval
-            # Skip the final two stop bits and refill the sample buffer
-            sample.extend(islice(bitstream, 2 * frames_per_bit, 3 * frames_per_bit - 1))
+            # fill the sample buffer with the first stop bit
+            sample.extend(islice(bitstream, frames_per_bit + 1))
             sign_changes = sum(sample)
+
+        prev_changes = sign_changes
 
 
 if __name__ == "__main__":
@@ -132,6 +150,7 @@ if __name__ == "__main__":
         default=-1,
         help="audio output device id (no monitor if none)",
     )
+
     parser.add_option(
         "-f",
         "--kcs-base-freq",
@@ -139,6 +158,14 @@ if __name__ == "__main__":
         type="int",
         default=2400,
         help="KCS base frequency (speed adjust; default 2400)",
+    )
+    parser.add_option(
+        "-H",
+        "--high-speed",
+        action="store_true",
+        default=False,
+        dest="high_speed",
+        help="use 1200 baud mode",
     )
     parser.add_option(
         "-b",
@@ -179,7 +206,9 @@ if __name__ == "__main__":
 
     # create generators
     sign_changes = generate_wav_sign_change_bits(device, opts.monitor_device)
-    byte_stream = generate_bytes(sign_changes, FRAMERATE, opts.kcs_base_freq)
+    byte_stream = generate_bytes(
+        sign_changes, FRAMERATE, opts.kcs_base_freq, opts.high_speed
+    )
 
     if opts.binary:
         outf = sys.stdout.buffer.raw

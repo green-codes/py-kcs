@@ -24,6 +24,7 @@ ONES_FREQ = 2400       # Hz (per KCS)
 ZERO_FREQ = 1200       # Hz (per KCS)
 AMPLITUDE = 128        # Amplitude of generated square waves
 CENTER    = 128        # Center point of generated waves
+HIGHSPEED = True       # if True, use 1200 baud instead of 300
 
 # Create a single square wave cycle of a given frequency
 def make_square_wave(freq,framerate):
@@ -32,8 +33,8 @@ def make_square_wave(freq,framerate):
            bytearray([CENTER+AMPLITUDE//2])*n
 
 # Create the wave patterns that encode 1s and 0s
-one_pulse  = make_square_wave(ONES_FREQ,FRAMERATE)*8
-zero_pulse = make_square_wave(ZERO_FREQ,FRAMERATE)*4
+one_pulse  = make_square_wave(ONES_FREQ,FRAMERATE)*(2 if HIGHSPEED else 8)
+zero_pulse = make_square_wave(ZERO_FREQ,FRAMERATE)*(1 if HIGHSPEED else 4)
 
 # Pause to insert after carriage returns (10 NULL bytes)
 null_pulse = ((zero_pulse * 9) + (one_pulse * 2))*10
@@ -86,4 +87,4 @@ if __name__ == '__main__':
     data = open(in_filename,"rb").read()
     #data = data.replace('\n','\r\n')         # Fix line endings
     rawdata = bytearray(data)
-    kcs_write_wav(out_filename,rawdata,5,5)
+    kcs_write_wav(out_filename,rawdata,1,1)
