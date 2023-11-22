@@ -6,6 +6,8 @@ Copyright (C) 2010
 
 Updated 2022: Greg Strike (www.gregorystrike.com)
 
+Updated 2023: Green Codes
+
 
 This is free software. You are free to use it however you wish, but if you
 decide to include it in some other package, please give me some credit.
@@ -42,6 +44,17 @@ If you want to decode raw binary data, type this:
 
 In this case, output is still directed to standard output, but
 is exactly as found in the audio (including all NULL bytes).
+
+### Decode from a live audio source
+
+Live decoding depends on the PyAudio library, which must be installed first.
+
+To decode from a live audio source, do this:
+
+    # python3 kcs_decode_live.py
+
+The output is directed to standard output, and defaults to ASCII mode.
+Use the `-h` flag to see the full usage information of this script. 
 
 ## More Information
 See the following blog posts for more information:
