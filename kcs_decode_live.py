@@ -13,16 +13,17 @@ from itertools import islice
 import pyaudio
 
 # audio I/O settings
-FORMAT = pyaudio.paInt16
+FORMAT = pyaudio.paInt16  # must be integer type
 CHANNELS = 1
 FRAMERATE = 44100
 CHUNK = 1024
+MSB_HI_THRES = 0x10  # MSB sign-change threshold
 
 # init PyAudio
 pa = pyaudio.PyAudio()
 
 
-# Generate a sequence representing sign bits
+# Generate a sequence representing sign changes
 def generate_wav_sign_change_bits(device, monitor_device):
     samplewidth = pa.get_sample_size(FORMAT)
 
@@ -60,9 +61,10 @@ def generate_wav_sign_change_bits(device, monitor_device):
         msbytes = bytearray(frames[samplewidth - 1 :: samplewidth * CHANNELS])
         # Emit a stream of sign-change bits
         for byte in msbytes:
-            signbit = byte & 0x80
-            yield 1 if (signbit ^ previous) else 0
-            previous = signbit
+            # error tolerance: only flip sign if sample>0 AND over threshold
+            byte_high = 1 if ((byte < 0x80) and (byte > MSB_HI_THRES)) else 0
+            yield 1 if (byte_high ^ previous) else 0
+            previous = byte_high
 
 
 # Generate a sequence of data bytes by sampling the stream of sign change bits
