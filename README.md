@@ -45,15 +45,21 @@ If you want to decode raw binary data, type this:
 In this case, output is still directed to standard output, but
 is exactly as found in the audio (including all NULL bytes).
 
-### Decode from a live audio source
+### Encode to / decode from a live audio source
 
-Live decoding depends on the PyAudio library, which must be installed first.
+Live encoding/decoding depends on the PyAudio library, which must be installed first.
 
-To decode from a live audio source, do this:
+To encode to a live audio sink (e.g. line out), do this:
 
-    # python3 kcs_decode_live.py
+    % python3 kcs_encode_live.py input_file
 
-The output is directed to standard output, and defaults to ASCII mode.
+Use the `-h` flag to see the full usage information of this script. 
+
+To decode from a live audio source (e,g, line in), do this:
+
+    % python3 kcs_decode_live.py
+
+The output is directed to standard output by default.
 Use the `-h` flag to see the full usage information of this script. 
 
 ## More Information
