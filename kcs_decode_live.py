@@ -14,11 +14,11 @@ import pyaudio
 
 # audio I/O settings
 FORMAT = pyaudio.paInt16  # must be signed integer type
-CHANNELS = 2
+CHANNELS = 1
 FRAMERATE = 44100
 CHUNK = 1024  # sweetspot, don't touch
 KCS_BASE_FREQ = 2400
-MSB_HI_THRES = 0x7F // 4  # MSB sign-change thresholds
+MSB_HI_THRES = 0x7F // 8  # MSB sign-change thresholds
 MSB_LO_THRES = 0xFF - MSB_HI_THRES  # symmetric
 ALGN_FRAC = 0.45  # fraction by which to advance sample on start bit
 
@@ -59,7 +59,7 @@ def generate_wav_sign_change_bits(device, monitor_device):
             stream.close()
             break
         if monitor_device >= 0:
-            stream2.write(frames, exception_on_underflow=False)
+            stream2.write(frames)
 
         # Extract most significant bytes from left-most audio channel
         msbytes = bytearray(frames[samplewidth - 1 :: samplewidth * CHANNELS])
@@ -225,12 +225,10 @@ if __name__ == "__main__":
     )
 
     # consume audio source and write to stdout (optionally to file)
-    stdout = sys.stdout.buffer.raw
     if opts.output_file:
         outf = open(opts.output_file, "wb")
+    else:
+        outf = sys.stdout.buffer.raw
     for b in byte_stream:
-        stdout.write(bytes([b]))
-        stdout.flush()
-        if opts.output_file:
-            outf.write(bytes([b]))
-            outf.flush()
+        outf.write(bytes([b]))
+        outf.flush()

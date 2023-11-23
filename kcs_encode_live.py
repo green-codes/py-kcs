@@ -16,10 +16,12 @@ http://en.wikipedia.org/wiki/Kansas_City_standard
 """
 
 from time import sleep
-from itertools import islice
 import sys
 import optparse
 import math
+
+from queue import Queue
+from threading import Thread
 
 import pyaudio
 
@@ -63,6 +65,19 @@ def kcs_encode_byte(byteval, one_pulse, zero_pulse, cuts):
     return bytes(encoded)
 
 
+def monitor_output(monitor_device, buffer_q):
+    monitor_stream = pa.open(
+        format=FORMAT,
+        channels=CHANNELS,
+        rate=FRAMERATE,
+        output=True,
+        output_device_index=monitor_device,
+        frames_per_buffer=1024,
+    )
+    while True:
+        monitor_stream.write(buffer_q.get())
+
+
 if __name__ == "__main__":
     parser = optparse.OptionParser()
     parser.add_option(
@@ -80,6 +95,14 @@ if __name__ == "__main__":
         type="int",
         default=-1,
         help="audio input device id (system default if none)",
+    )
+    parser.add_option(
+        "-m",
+        "--monitor-device",
+        dest="monitor_device",
+        type="int",
+        default=-1,
+        help="audio output device id (no monitor if none)",
     )
     parser.add_option(
         "-s",
@@ -139,8 +162,6 @@ if __name__ == "__main__":
         exit(0)
 
     if len(args) != 1:
-        # print("Usage : %s [options] infile" % sys.argv[0], file=sys.stderr)
-        # raise SystemExit(1)
         input_f = sys.stdin.buffer.raw
     else:
         # load input file
@@ -172,17 +193,32 @@ if __name__ == "__main__":
     )
     stdout = sys.stdout.buffer.raw
 
+    if opts.monitor_device >= 0:
+        buffer_q = Queue()
+        monitor_thread = Thread(
+            target=monitor_output,
+            kwargs=dict(monitor_device=opts.monitor_device, buffer_q=buffer_q),
+        )
+        monitor_thread.daemon = True
+        monitor_thread.start()
+
     leader = one_pulse * int(FRAMERATE / len(one_pulse)) * opts.leader
+    if opts.monitor_device >= 0:
+        buffer_q.put(leader)
     stream.write(leader, exception_on_underflow=True)
 
     for byteval in input_f.read():
         encoded_data = kcs_encode_byte(byteval, one_pulse, zero_pulse, opts.cuts)
+        if opts.monitor_device >= 0:
+            buffer_q.put(encoded_data)
         stream.write(encoded_data, exception_on_underflow=True)
         if opts.echo:
             stdout.write(bytes([byteval]))
             stdout.flush()
 
     trailer = one_pulse * int(FRAMERATE / len(one_pulse)) * opts.trailer
+    if opts.monitor_device >= 0:
+        buffer_q.put(trailer)
     stream.write(trailer, exception_on_underflow=True)
 
     sleep(1)
