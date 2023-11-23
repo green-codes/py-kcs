@@ -139,8 +139,12 @@ if __name__ == "__main__":
         exit(0)
 
     if len(args) != 1:
-        print("Usage : %s [options] infile" % sys.argv[0], file=sys.stderr)
-        raise SystemExit(1)
+        # print("Usage : %s [options] infile" % sys.argv[0], file=sys.stderr)
+        # raise SystemExit(1)
+        input_f = sys.stdin.buffer.raw
+    else:
+        # load input file
+        input_f = open(args[0], "rb")
 
     # if device not specified, use system default
     if opts.device < 0:
@@ -157,10 +161,6 @@ if __name__ == "__main__":
     one_pulse = make_sin_wave(ONES_FREQ, FRAMERATE) * (2 if HIGHSPEED else 8)
     zero_pulse = make_sin_wave(ZERO_FREQ, FRAMERATE) * (1 if HIGHSPEED else 4)
 
-    # load input file
-    with open(args[0], "rb") as f:
-        data = f.read()
-
     # start outputting
     stream = pa.open(
         format=FORMAT,
@@ -175,7 +175,7 @@ if __name__ == "__main__":
     leader = one_pulse * int(FRAMERATE / len(one_pulse)) * opts.leader
     stream.write(leader, exception_on_underflow=True)
 
-    for byteval in data:
+    for byteval in input_f.read():
         encoded_data = kcs_encode_byte(byteval, one_pulse, zero_pulse, opts.cuts)
         stream.write(encoded_data, exception_on_underflow=True)
         if opts.echo:

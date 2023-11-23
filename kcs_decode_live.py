@@ -20,7 +20,7 @@ CHUNK = 1024  # sweetspot, don't touch
 KCS_BASE_FREQ = 2400
 MSB_HI_THRES = 0x7F // 4  # MSB sign-change thresholds
 MSB_LO_THRES = 0xFF - MSB_HI_THRES  # symmetric
-ALGN_FRAC = 0.5  # fraction by which to advance sample on start bit
+ALGN_FRAC = 0.45  # fraction by which to advance sample on start bit
 
 # init PyAudio
 pa = pyaudio.PyAudio()
