@@ -99,7 +99,9 @@ def generate_bytes(bitstream, framerate, kcs_base_adj, speed_mode, cuts):
         thres_1_lo = 13
 
     # Compute the number of audio frames used to encode a single data bit
-    frames_per_bit = int(round(float(framerate) * fpb_mult / kcs_base_freq))
+    frames_per_bit_real = float(framerate) * fpb_mult / kcs_base_freq
+    frames_per_bit = int(round(frames_per_bit_real))  # rounded int
+    frames_per_bit_d = frames_per_bit_real - frames_per_bit  # abs(diff)<0.5
 
     # Queue of sampled sign bits
     sample = deque(maxlen=frames_per_bit)
@@ -124,9 +126,14 @@ def generate_bytes(bitstream, framerate, kcs_base_adj, speed_mode, cuts):
             _ = list(islice(bitstream, int(frames_per_bit * ALGN_FRAC)))
             # obtain eight bits (least significant first)
             byteval = 0
+            acc_diff = 0  # accumulated window position diff
             for mask in bitmasks:
-                bit_sample = list(islice(bitstream, frames_per_bit))
-                # use partial bit sample for better error tolerance
+                # obtain sample for current bit w/window correction
+                acc_diff += frames_per_bit_d
+                corr = int(round(acc_diff))
+                acc_diff -= round(acc_diff)
+                bit_sample = list(islice(bitstream, frames_per_bit + corr))
+                # NOTE: use partial bit sample for better error tolerance
                 bit_sample = bit_sample[: int(len(bit_sample) * 7 / 8)]
                 if sum(bit_sample) >= thres_1_lo:
                     byteval |= mask
